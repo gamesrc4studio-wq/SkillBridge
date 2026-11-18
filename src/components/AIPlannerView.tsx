@@ -1,8 +1,9 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
   CalendarClock,
   CheckCircle2,
+  FolderKanban,
   Loader2,
   PlusSquare,
   Sparkles,
@@ -14,12 +15,13 @@ export const AIPlannerView: React.FC = () => {
   const { projects, teams, currentProfile, authUser, createTask, setActiveView, pushToast } = useApp();
   const uid = currentProfile?.userId || authUser?.uid || '';
 
+  // Only projects the user owns or belongs to can be planned
   const myProjects = useMemo(
     () => projects.filter((p) => p.ownerId === uid || p.memberIds.includes(uid)),
     [projects, uid]
   );
 
-  const [selectedProjId, setSelectedProjId] = useState<string>(myProjects[0]?.projectId || projects[0]?.projectId || '');
+  const [selectedProjId, setSelectedProjId] = useState<string>(myProjects[0]?.projectId || '');
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [plan, setPlan] = useState<AIProjectPlan | null>(null);
@@ -27,18 +29,28 @@ export const AIPlannerView: React.FC = () => {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [addingTasks, setAddingTasks] = useState(false);
 
+  useEffect(() => {
+    if (myProjects.length === 0) {
+      if (selectedProjId) setSelectedProjId('');
+      return;
+    }
+    if (!myProjects.some((p) => p.projectId === selectedProjId)) {
+      setSelectedProjId(myProjects[0].projectId);
+    }
+  }, [myProjects, selectedProjId]);
+
   const selectedProject = useMemo(
-    () => projects.find((p) => p.projectId === selectedProjId) || null,
-    [projects, selectedProjId]
+    () => myProjects.find((p) => p.projectId === selectedProjId) || null,
+    [myProjects, selectedProjId]
   );
 
-  const canAddTasksToSelected = Boolean(
+  const canPlanSelected = Boolean(
     selectedProject && (selectedProject.ownerId === uid || selectedProject.memberIds.includes(uid))
   );
 
   const generatePlan = async () => {
-    if (!selectedProject) {
-      setErrorMsg('Please select a project first.');
+    if (!selectedProject || !canPlanSelected) {
+      setErrorMsg('Only project owners and confirmed team members can generate a plan for a project.');
       return;
     }
 
@@ -84,7 +96,7 @@ export const AIPlannerView: React.FC = () => {
   };
 
   const handleConfirmAddTasks = async () => {
-    if (!plan || !selectedProject || !canAddTasksToSelected) return;
+    if (!plan || !selectedProject || !canPlanSelected) return;
     const team = teams.find((t) => t.projectId === selectedProject.projectId);
     const teamId = team?.teamId || `team_${selectedProject.projectId}`;
 
@@ -113,38 +125,84 @@ export const AIPlannerView: React.FC = () => {
     }
   };
 
+  if (myProjects.length === 0) {
+    return (
+      <div className="space-y-6">
+        <div className="pb-5 border-b border-[#D1D9E0]">
+          <p className="text-xs font-semibold text-[#9A6700] mb-1.5 inline-flex items-center gap-1.5">
+            <Sparkles className="w-3.5 h-3.5" />
+            Gemini Development Planner
+          </p>
+          <h1 className="text-2xl font-bold text-[#1F2328]">AI Project Planner</h1>
+          <p className="mt-1 text-sm text-[#656D76]">
+            Generate execution phases, milestones, and sprint tasks for projects you own or belong to.
+          </p>
+        </div>
+
+        <div className="p-10 text-center bg-white border border-[#D1D9E0] rounded-lg">
+          <FolderKanban className="w-10 h-10 text-[#656D76] mx-auto mb-3" />
+          <h2 className="text-base font-bold text-[#1F2328]">Join or Create a Project to Plan</h2>
+          <p className="mt-1 text-sm text-[#656D76] max-w-md mx-auto">
+            Only project owners and team members can generate development plans and append tasks to a project workspace.
+          </p>
+          <div className="mt-5 flex flex-wrap justify-center gap-3">
+            <button
+              type="button"
+              onClick={() => setActiveView('my-projects')}
+              className="px-4 py-2 text-sm font-medium text-white bg-[#0969DA] hover:bg-[#0550AE] rounded-lg"
+            >
+              Create a Project
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveView('explore-projects')}
+              className="px-4 py-2 text-sm font-medium text-[#1F2328] bg-[#F6F8FA] hover:bg-[#EAEFF4] border border-[#D1D9E0] rounded-lg"
+            >
+              Explore Projects
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="pb-5 border-b border-[#D1D9E0]">
-        <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-[#FFF8C5] text-[#9A6700] text-xs font-medium mb-2">
+        <p className="text-xs font-semibold text-[#9A6700] mb-1.5 inline-flex items-center gap-1.5">
           <Sparkles className="w-3.5 h-3.5" />
           Gemini Development Planner
-        </div>
+        </p>
         <h1 className="text-2xl font-bold text-[#1F2328]">AI Project Planner</h1>
         <p className="mt-1 text-sm text-[#656D76]">
-          Select an active project to generate execution phases, milestones, prioritized tasks, and technical risk mitigations.
+          Select one of your active projects to generate execution phases, milestones, prioritized tasks, and technical risk mitigations.
         </p>
       </div>
 
-      {/* Project Selector */}
+      {/* Project Selector (Restricted to member/owned projects) */}
       <div className="p-5 bg-[#F6F8FA] border border-[#D1D9E0] rounded-lg flex flex-col sm:flex-row sm:items-end gap-4">
         <div className="flex-1">
-          <label className="block text-xs font-semibold text-[#1F2328] mb-1.5">Select Project</label>
+          <label className="block text-xs font-semibold text-[#1F2328] mb-1.5">Select Your Project</label>
           <select
             value={selectedProjId}
-            onChange={(e) => setSelectedProjId(e.target.value)}
+            onChange={(e) => {
+              setSelectedProjId(e.target.value);
+              setPlan(null);
+              setErrorMsg(null);
+              setConfirmOpen(false);
+            }}
             className="w-full px-3 py-2 text-sm bg-white border border-[#D1D9E0] rounded-lg focus:outline-none focus:border-[#0969DA]"
           >
-            {projects.map((p) => (
+            {myProjects.map((p) => (
               <option key={p.projectId} value={p.projectId}>
-                {p.title} ({p.category}){p.ownerId === uid || p.memberIds.includes(uid) ? ' · Member' : ''}
+                {p.title} ({p.category}) · {p.ownerId === uid ? 'Owner' : 'Team Member'}
               </option>
             ))}
           </select>
         </div>
         <button
           type="button"
-          disabled={loading || !selectedProject}
+          disabled={loading || !selectedProject || !canPlanSelected}
           onClick={generatePlan}
           className="inline-flex items-center gap-2 px-5 py-2 text-sm font-medium text-white bg-[#0969DA] hover:bg-[#0550AE] disabled:opacity-60 rounded-lg whitespace-nowrap shrink-0"
         >
@@ -202,14 +260,12 @@ export const AIPlannerView: React.FC = () => {
                   Suggested Sprint Tasks ({selectedTaskIndices.length}/{plan.tasks.length} selected)
                 </h2>
                 <p className="text-xs text-[#656D76]">
-                  {canAddTasksToSelected
-                    ? 'Adding tasks appends them cleanly to your workspace without overwriting existing tasks.'
-                    : 'Join or own this project to append tasks directly to its workspace.'}
+                  Adding tasks appends them cleanly to your workspace without overwriting existing tasks.
                 </p>
               </div>
               <button
                 type="button"
-                disabled={selectedTaskIndices.length === 0 || !canAddTasksToSelected}
+                disabled={selectedTaskIndices.length === 0 || !canPlanSelected}
                 onClick={() => setConfirmOpen(true)}
                 className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-medium text-white bg-[#1A7F37] hover:bg-[#15692D] disabled:opacity-50 rounded-lg shrink-0"
               >
@@ -223,7 +279,7 @@ export const AIPlannerView: React.FC = () => {
                 <div className="text-xs text-[#1F2328]">
                   <p className="font-semibold">Confirm Adding {selectedTaskIndices.length} Generated Tasks</p>
                   <p className="text-[#656D76] mt-0.5">
-                    Existing tasks in "{selectedProject.title}" will be preserved. Proceed?
+                    Existing tasks in &quot;{selectedProject.title}&quot; will be preserved. Proceed?
                   </p>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">

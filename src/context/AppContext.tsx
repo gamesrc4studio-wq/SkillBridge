@@ -1270,8 +1270,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           }
 
           if (matchingTeam && !matchingTeam.memberIds.includes(invitation.applicantId)) {
-            const devSnap = await getDoc(doc(db, 'users', invitation.applicantId));
-            const devData = devSnap.exists() ? (devSnap.data() as UserProfile) : null;
+            let devData: UserProfile | null = null;
+            try {
+              const devSnap = await getDoc(doc(db, 'users', invitation.applicantId));
+              devData = devSnap.exists() ? (devSnap.data() as UserProfile) : null;
+            } catch {
+              devData = null;
+            }
             const newSnap: TeamMemberSnapshot = {
               userId: invitation.applicantId,
               name: invitation.applicantName,

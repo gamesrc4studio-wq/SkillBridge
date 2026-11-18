@@ -238,7 +238,7 @@ service cloud.firestore {
     }
 
     match /users/{userId} {
-      allow get: if isValidId(userId) && isSignedIn() && (existing().isPublic == true || isOwner(userId) || isAdmin());
+      allow get: if isValidId(userId) && isSignedIn() && (resource == null || existing().isPublic == true || isOwner(userId) || isAdmin());
       allow list: if isSignedIn() && (existing().isPublic == true || existing().userId == request.auth.uid || isAdmin());
 
       allow create: if isValidId(userId)
@@ -289,6 +289,7 @@ service cloud.firestore {
 
     match /projects/{projectId} {
       allow get: if isValidId(projectId) && isSignedIn() && (
+        resource == null ||
         existing().visibility == 'Public' ||
         existing().ownerId == request.auth.uid ||
         request.auth.uid in existing().memberIds ||
@@ -402,6 +403,7 @@ service cloud.firestore {
 
     match /invitations/{invitationId} {
       allow get: if isValidId(invitationId) && isSignedIn() && (
+        resource == null ||
         existing().senderId == request.auth.uid ||
         existing().receiverId == request.auth.uid ||
         isAdmin()

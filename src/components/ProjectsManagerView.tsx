@@ -92,6 +92,7 @@ export const ProjectsManagerView: React.FC<ProjectsManagerViewProps> = ({ mode }
   const [joinTarget, setJoinTarget] = useState<Project | null>(null);
   const [joinMessage, setJoinMessage] = useState('');
   const [joinRole, setJoinRole] = useState('');
+  const [submittingJoin, setSubmittingJoin] = useState(false);
 
   // Report Modal
   const [reportTarget, setReportTarget] = useState<Project | null>(null);
@@ -302,7 +303,8 @@ export const ProjectsManagerView: React.FC<ProjectsManagerViewProps> = ({ mode }
 
   const handleJoinSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!joinTarget) return;
+    if (!joinTarget || submittingJoin) return;
+    setSubmittingJoin(true);
     const ownerProfile = developers.find((d) => d.userId === joinTarget.ownerId) || {
       userId: joinTarget.ownerId,
       name: joinTarget.ownerName,
@@ -321,16 +323,22 @@ export const ProjectsManagerView: React.FC<ProjectsManagerViewProps> = ({ mode }
       isPublic: true,
       profileCompleted: true,
     };
-    await sendInvitation({
-      type: 'join_request',
-      project: joinTarget,
-      targetUser: ownerProfile,
-      roleSuggested: joinRole || 'Collaborator',
-      message: joinMessage,
-    });
-    setJoinTarget(null);
-    setJoinMessage('');
-    setJoinRole('');
+    try {
+      await sendInvitation({
+        type: 'join_request',
+        project: joinTarget,
+        targetUser: ownerProfile,
+        roleSuggested: joinRole || 'Collaborator',
+        message: joinMessage,
+      });
+      setJoinTarget(null);
+      setJoinMessage('');
+      setJoinRole('');
+    } catch {
+      // Toast already surfaced by AppContext
+    } finally {
+      setSubmittingJoin(false);
+    }
   };
 
   const handleReportSubmit = async (e: React.FormEvent) => {
@@ -510,7 +518,7 @@ export const ProjectsManagerView: React.FC<ProjectsManagerViewProps> = ({ mode }
             const isOwner = project.ownerId === uid;
             const isMember = project.memberIds.includes(uid);
             const isSaved = savedProjectIds.includes(project.projectId);
-            const alreadyRequested = invitations.some(
+            const pendingInv = invitations.find(
               (i) => i.projectId === project.projectId && i.applicantId === uid && i.status === 'Pending'
             );
 
@@ -624,8 +632,16 @@ export const ProjectsManagerView: React.FC<ProjectsManagerViewProps> = ({ mode }
                       </button>
                     ) : isMember ? (
                       <span className="text-xs font-medium text-[#1A7F37] px-2">Member</span>
-                    ) : alreadyRequested ? (
-                      <span className="text-xs font-medium text-[#656D76] px-2">Requested</span>
+                    ) : pendingInv?.type === 'invite' ? (
+                      <button
+                        type="button"
+                        onClick={() => setActiveView('invitations')}
+                        className="text-xs font-medium text-[#0969DA] hover:underline px-2"
+                      >
+                        Invited · View Inbox
+                      </button>
+                    ) : pendingInv ? (
+                      <span className="text-xs font-medium text-[#9A6700] px-2">Requested</span>
                     ) : (
                       <button
                         type="button"
@@ -1121,10 +1137,11 @@ export const ProjectsManagerView: React.FC<ProjectsManagerViewProps> = ({ mode }
               </button>
               <button
                 type="submit"
-                className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-medium text-white bg-[#0969DA] hover:bg-[#0550AE] rounded-lg"
+                disabled={submittingJoin}
+                className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-medium text-white bg-[#0969DA] hover:bg-[#0550AE] disabled:opacity-60 rounded-lg"
               >
                 <Send className="w-3.5 h-3.5" />
-                Send Request
+                {submittingJoin ? 'Sending...' : 'Send Request'}
               </button>
             </div>
           </form>

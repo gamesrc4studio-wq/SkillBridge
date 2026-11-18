@@ -101,19 +101,10 @@ export const LandingPage: React.FC = () => {
           </nav>
 
           <div className="flex items-center gap-3 shrink-0">
-            {!authUser && (
-              <button
-                type="button"
-                onClick={openLogin}
-                className="px-3.5 py-2 text-sm font-medium text-[#1F2328] hover:text-[#0969DA] rounded-lg transition-colors whitespace-nowrap shrink-0"
-              >
-                Login
-              </button>
-            )}
             <button
               type="button"
               onClick={openLogin}
-              className="px-4 py-2 text-sm font-medium text-white bg-[#0969DA] hover:bg-[#0550AE] rounded-lg transition-colors whitespace-nowrap shrink-0"
+              className="px-4 py-2 text-sm font-semibold text-white bg-[#0969DA] hover:bg-[#0550AE] rounded-lg transition-colors whitespace-nowrap shrink-0"
             >
               {authUser ? 'Open Dashboard' : 'Get Started'}
             </button>

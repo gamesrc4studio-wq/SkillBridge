@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ExternalLink, Flag, Github, Globe, Mail, Search, Send, UserPlus, Users, X } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { calculateSkillMatch } from '../utils/matchingEngine';
@@ -9,6 +9,7 @@ export const DevelopersDirectoryView: React.FC = () => {
   const {
     developers,
     projects,
+    invitations,
     currentProfile,
     authUser,
     selectedProfileId,
@@ -28,11 +29,18 @@ export const DevelopersDirectoryView: React.FC = () => {
   const [availFilter, setAvailFilter] = useState('All');
   const [matchProjectId, setMatchProjectId] = useState<string>(myOwnedProjects[0]?.projectId || '');
 
+  useEffect(() => {
+    if (!matchProjectId && myOwnedProjects[0]) {
+      setMatchProjectId(myOwnedProjects[0].projectId);
+    }
+  }, [matchProjectId, myOwnedProjects]);
+
   // Invite Modal
   const [inviteTarget, setInviteTarget] = useState<UserProfile | null>(null);
   const [inviteProjectId, setInviteProjectId] = useState<string>(myOwnedProjects[0]?.projectId || '');
   const [inviteRole, setInviteRole] = useState('');
   const [inviteMsg, setInviteMsg] = useState('');
+  const [sendingInvite, setSendingInvite] = useState(false);
 
   // Report Modal
   const [reportDev, setReportDev] = useState<UserProfile | null>(null);
@@ -88,17 +96,22 @@ export const DevelopersDirectoryView: React.FC = () => {
 
   const handleSendInvite = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inviteTarget) return;
+    if (!inviteTarget || sendingInvite) return;
     const proj = projects.find((p) => p.projectId === inviteProjectId);
     if (!proj) return;
-    await sendInvitation({
-      type: 'invite',
-      project: proj,
-      targetUser: inviteTarget,
-      roleSuggested: inviteRole || 'Collaborator',
-      message: inviteMsg,
-    });
-    setInviteTarget(null);
+    setSendingInvite(true);
+    try {
+      await sendInvitation({
+        type: 'invite',
+        project: proj,
+        targetUser: inviteTarget,
+        roleSuggested: inviteRole || 'Collaborator',
+        message: inviteMsg,
+      });
+      setInviteTarget(null);
+    } finally {
+      setSendingInvite(false);
+    }
   };
 
   const handleReportSubmit = async (e: React.FormEvent) => {
@@ -280,16 +293,41 @@ export const DevelopersDirectoryView: React.FC = () => {
                   >
                     View Profile
                   </button>
-                  {dev.userId !== uid && (
-                    <button
-                      type="button"
-                      onClick={() => handleOpenInvite(dev)}
-                      className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-white bg-[#0969DA] hover:bg-[#0550AE] rounded-md"
-                    >
-                      <UserPlus className="w-3.5 h-3.5" />
-                      Invite to Project
-                    </button>
-                  )}
+                  {dev.userId !== uid && (() => {
+                    const isAlreadyMember = referenceProject
+                      ? referenceProject.memberIds.includes(dev.userId)
+                      : false;
+                    const existingRefInv = referenceProject
+                      ? invitations.find(
+                          (i) => i.projectId === referenceProject.projectId && i.applicantId === dev.userId
+                        )
+                      : null;
+
+                    if (isAlreadyMember) {
+                      return (
+                        <span className="px-2.5 py-1.5 text-xs font-medium text-[#1A7F37]">
+                          Project Member
+                        </span>
+                      );
+                    }
+                    if (existingRefInv?.status === 'Pending') {
+                      return (
+                        <span className="px-2.5 py-1.5 text-xs font-medium text-[#9A6700]">
+                          Invite Pending
+                        </span>
+                      );
+                    }
+                    return (
+                      <button
+                        type="button"
+                        onClick={() => handleOpenInvite(dev)}
+                        className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-white bg-[#0969DA] hover:bg-[#0550AE] rounded-md"
+                      >
+                        <UserPlus className="w-3.5 h-3.5" />
+                        {existingRefInv?.status === 'Rejected' ? 'Re-invite' : 'Invite to Project'}
+                      </button>
+                    );
+                  })()}
                 </div>
               </div>
             </div>
@@ -422,70 +460,96 @@ export const DevelopersDirectoryView: React.FC = () => {
       )}
 
       {/* Invite Modal */}
-      {inviteTarget && (
-        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
-          <form
-            onSubmit={handleSendInvite}
-            className="bg-white border border-[#D1D9E0] rounded-lg max-w-md w-full p-6 space-y-4"
-          >
-            <div className="flex items-center justify-between">
-              <h3 className="text-base font-bold text-[#1F2328]">Invite {inviteTarget.name}</h3>
-              <button type="button" onClick={() => setInviteTarget(null)} className="text-[#656D76]">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-[#1F2328] mb-1">Select Project</label>
-              <select
-                value={inviteProjectId}
-                onChange={(e) => setInviteProjectId(e.target.value)}
-                className="w-full px-3 py-2 text-sm bg-[#F6F8FA] border border-[#D1D9E0] rounded-lg"
-              >
-                {myOwnedProjects.map((p) => (
-                  <option key={p.projectId} value={p.projectId}>
-                    {p.title}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-[#1F2328] mb-1">Suggested Role</label>
-              <input
-                type="text"
-                value={inviteRole}
-                onChange={(e) => setInviteRole(e.target.value)}
-                placeholder="e.g. AI/ML Engineer, Frontend Lead"
-                className="w-full px-3 py-2 text-sm bg-[#F6F8FA] border border-[#D1D9E0] rounded-lg"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-[#1F2328] mb-1">Invitation Note</label>
-              <textarea
-                rows={3}
-                value={inviteMsg}
-                onChange={(e) => setInviteMsg(e.target.value)}
-                className="w-full px-3 py-2 text-sm bg-[#F6F8FA] border border-[#D1D9E0] rounded-lg"
-              />
-            </div>
-            <div className="flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setInviteTarget(null)}
-                className="px-3.5 py-2 text-xs font-medium bg-[#F6F8FA] border border-[#D1D9E0] rounded-lg"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-medium text-white bg-[#0969DA] rounded-lg"
-              >
-                <Send className="w-3.5 h-3.5" />
-                Send Invitation
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
+      {inviteTarget && (() => {
+        const selectedProj = projects.find((p) => p.projectId === inviteProjectId) || null;
+        const alreadyMemberInSelected = selectedProj
+          ? selectedProj.memberIds.includes(inviteTarget.userId)
+          : false;
+        const pendingInvInSelected = selectedProj
+          ? invitations.find(
+              (i) =>
+                i.projectId === selectedProj.projectId &&
+                i.applicantId === inviteTarget.userId &&
+                i.status === 'Pending'
+            )
+          : null;
+
+        return (
+          <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
+            <form
+              onSubmit={handleSendInvite}
+              className="bg-white border border-[#D1D9E0] rounded-lg max-w-md w-full p-6 space-y-4"
+            >
+              <div className="flex items-center justify-between">
+                <h3 className="text-base font-bold text-[#1F2328]">Invite {inviteTarget.name}</h3>
+                <button type="button" onClick={() => setInviteTarget(null)} className="text-[#656D76]">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-[#1F2328] mb-1">Select Project</label>
+                <select
+                  value={inviteProjectId}
+                  onChange={(e) => setInviteProjectId(e.target.value)}
+                  className="w-full px-3 py-2 text-sm bg-[#F6F8FA] border border-[#D1D9E0] rounded-lg"
+                >
+                  {myOwnedProjects.map((p) => (
+                    <option key={p.projectId} value={p.projectId}>
+                      {p.title}
+                    </option>
+                  ))}
+                </select>
+                {alreadyMemberInSelected && (
+                  <p className="mt-1.5 text-xs text-[#1A7F37] font-medium">
+                    {inviteTarget.name} is already a member of this project.
+                  </p>
+                )}
+                {pendingInvInSelected && (
+                  <p className="mt-1.5 text-xs text-[#9A6700] font-medium">
+                    An invitation is already pending acceptance from {inviteTarget.name}.
+                  </p>
+                )}
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-[#1F2328] mb-1">Suggested Role</label>
+                <input
+                  type="text"
+                  value={inviteRole}
+                  onChange={(e) => setInviteRole(e.target.value)}
+                  placeholder="e.g. AI/ML Engineer, Frontend Lead"
+                  className="w-full px-3 py-2 text-sm bg-[#F6F8FA] border border-[#D1D9E0] rounded-lg"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-[#1F2328] mb-1">Invitation Note</label>
+                <textarea
+                  rows={3}
+                  value={inviteMsg}
+                  onChange={(e) => setInviteMsg(e.target.value)}
+                  className="w-full px-3 py-2 text-sm bg-[#F6F8FA] border border-[#D1D9E0] rounded-lg"
+                />
+              </div>
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setInviteTarget(null)}
+                  className="px-3.5 py-2 text-xs font-medium bg-[#F6F8FA] border border-[#D1D9E0] rounded-lg"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={sendingInvite || alreadyMemberInSelected || Boolean(pendingInvInSelected)}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-medium text-white bg-[#0969DA] disabled:opacity-50 rounded-lg"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  {sendingInvite ? 'Sending...' : 'Send Invitation'}
+                </button>
+              </div>
+            </form>
+          </div>
+        );
+      })()}
 
       {/* Report Profile Modal */}
       {reportDev && (

@@ -343,8 +343,13 @@ service cloud.firestore {
 
     match /teams/{teamId} {
       allow get: if isValidId(teamId) && isSignedIn() && (
+        resource == null ||
         existing().ownerId == request.auth.uid ||
         request.auth.uid in existing().memberIds ||
+        (
+          exists(/databases/$(database)/documents/invitations/$(existing().projectId + '_' + request.auth.uid)) &&
+          get(/databases/$(database)/documents/invitations/$(existing().projectId + '_' + request.auth.uid)).data.receiverId == request.auth.uid
+        ) ||
         isAdmin()
       );
       allow list: if isSignedIn() && (

@@ -178,6 +178,7 @@ interface AppContextValue {
     message?: string;
   }) => Promise<void>;
   respondToInvitation: (invitation: Invitation, decision: 'Accepted' | 'Rejected') => Promise<void>;
+  cancelInvitation: (invitation: Invitation) => Promise<void>;
 
   // Teams & Workspace
   createOrUpdateTeam: (params: {
@@ -1129,6 +1130,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const receiverId = type === 'invite' ? targetUser.userId : project.ownerId;
       const receiverName = type === 'invite' ? targetUser.name : project.ownerName;
 
+      if (callerId === receiverId) {
+        pushToast('info', type === 'invite' ? 'You cannot invite yourself to your own project.' : 'You already own this project.');
+        return;
+      }
+
+      if (project.memberIds.includes(applicantId)) {
+        pushToast('info', `${applicantName} is already a member of "${project.title}".`);
+        return;
+      }
+
       const invitationId = sanitizeId(`${project.projectId}_${applicantId}`);
       const notifId = sanitizeId(`notif_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`);
 
@@ -1156,16 +1167,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           : `${callerName} requested to join "${project.title}".`;
 
       try {
-        const existingInv = await getDoc(doc(db, 'invitations', invitationId));
-        if (existingInv.exists() && existingInv.data()?.status === 'Rejected') {
-          await deleteDoc(doc(db, 'invitations', invitationId));
+        const invRef = doc(db, 'invitations', invitationId);
+        const existingInv = await getDoc(invRef);
+        if (existingInv.exists()) {
+          const existingStatus = existingInv.data()?.status;
+          if (existingStatus === 'Pending') {
+            pushToast('info', `A pending ${type === 'invite' ? 'invitation' : 'join request'} already exists for "${project.title}".`);
+            return;
+          }
+          if (existingStatus === 'Accepted') {
+            pushToast('info', `${applicantName} has already accepted an invitation for "${project.title}".`);
+            return;
+          }
+          if (existingStatus === 'Rejected') {
+            await deleteDoc(invRef);
+          }
         }
-        await setDoc(doc(db, 'invitations', invitationId), {
+
+        const batch = writeBatch(db);
+        batch.set(invRef, {
           ...invPayload,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
         });
-        await setDoc(doc(db, 'notifications', notifId), {
+        batch.set(doc(db, 'notifications', notifId), {
           notificationId: notifId,
           userId: receiverId,
           actorId: callerId,
@@ -1175,9 +1200,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           read: false,
           timestamp: serverTimestamp(),
         });
+        await batch.commit();
+
         await logActivity(callerId, type === 'invite' ? 'Sent project invitation' : 'Requested to join project', project.title);
-        pushToast('success', type === 'invite' ? `Invitation sent to ${targetUser.name}.` : 'Join request submitted.');
+        pushToast('success', type === 'invite' ? `Invitation sent to ${targetUser.name} (Pending acceptance).` : 'Join request submitted.');
       } catch (err) {
+        pushToast('error', 'Could not send invitation. Please try again.');
         handleFirestoreError(err, OperationType.WRITE, `invitations/${invitationId}`);
       }
     },
@@ -1189,6 +1217,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const callerId = authUser?.uid;
       const callerName = currentProfile?.name || authUser?.displayName || 'Developer';
       if (!callerId) return;
+
+      if (invitation.receiverId !== callerId) {
+        pushToast('error', 'Only the recipient can respond to this invitation.');
+        return;
+      }
+
+      if (invitation.status !== 'Pending') {
+        pushToast('info', `This invitation was already ${invitation.status.toLowerCase()}.`);
+        return;
+      }
 
       const notifId = sanitizeId(`notif_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`);
       const notifMsg =
@@ -1219,7 +1257,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             }
           }
 
-          const matchingTeam = teams.find((t) => t.projectId === invitation.projectId);
+          let matchingTeam = teams.find((t) => t.projectId === invitation.projectId) || null;
+          if (!matchingTeam) {
+            try {
+              const teamSnap = await getDoc(doc(db, 'teams', sanitizeId(`team_${invitation.projectId}`)));
+              if (teamSnap.exists()) {
+                matchingTeam = teamSnap.data() as Team;
+              }
+            } catch {
+              matchingTeam = null;
+            }
+          }
+
           if (matchingTeam && !matchingTeam.memberIds.includes(invitation.applicantId)) {
             const devSnap = await getDoc(doc(db, 'users', invitation.applicantId));
             const devData = devSnap.exists() ? (devSnap.data() as UserProfile) : null;
@@ -1255,10 +1304,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         await logActivity(callerId, `${decision} collaboration`, invitation.projectTitle);
         pushToast('success', `Invitation ${decision.toLowerCase()}.`);
       } catch (err) {
+        pushToast('error', 'Failed to update invitation status.');
         handleFirestoreError(err, OperationType.UPDATE, `invitations/${invitation.invitationId}`);
       }
     },
     [authUser, currentProfile, teams, logActivity, pushToast]
+  );
+
+  const cancelInvitation = useCallback(
+    async (invitation: Invitation) => {
+      const callerId = authUser?.uid;
+      if (!callerId) return;
+      if (invitation.senderId !== callerId && !isAdmin) {
+        pushToast('error', 'Only the sender can withdraw this invitation.');
+        return;
+      }
+      try {
+        await deleteDoc(doc(db, 'invitations', invitation.invitationId));
+        pushToast('info', `Withdrew invitation for "${invitation.projectTitle}".`);
+      } catch (err) {
+        pushToast('error', 'Could not withdraw invitation.');
+        handleFirestoreError(err, OperationType.DELETE, `invitations/${invitation.invitationId}`);
+      }
+    },
+    [authUser, isAdmin, pushToast]
   );
 
   // Team Creation / Update
@@ -1696,6 +1765,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     deleteProject,
     sendInvitation,
     respondToInvitation,
+    cancelInvitation,
     createOrUpdateTeam,
     updateTeamWorkspace,
     createTask,

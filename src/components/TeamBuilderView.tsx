@@ -25,6 +25,7 @@ export const TeamBuilderView: React.FC = () => {
     currentProfile,
     authUser,
     sendInvitation,
+    cancelInvitation,
     createOrUpdateTeam,
     setActiveView,
     setSelectedTeamId,
@@ -73,12 +74,20 @@ export const TeamBuilderView: React.FC = () => {
   const [creatingTeam, setCreatingTeam] = useState(false);
 
   useEffect(() => {
-    if (recommendedPlan) {
-      setSelectedCandidateIds(recommendedPlan.candidates.map((c) => c.match.developer.userId));
+    if (recommendedPlan && selectedProject) {
+      const invitableIds = recommendedPlan.candidates
+        .map((c) => c.match.developer.userId)
+        .filter((devId) => {
+          const inv = invitations.find(
+            (i) => i.projectId === selectedProject.projectId && i.applicantId === devId
+          );
+          return !inv || inv.status === 'Rejected';
+        });
+      setSelectedCandidateIds(invitableIds);
     } else {
       setSelectedCandidateIds([]);
     }
-  }, [selectedProjId, recommendedPlan]);
+  }, [selectedProjId, recommendedPlan, selectedProject, invitations]);
 
   const toggleCandidate = (devId: string) => {
     setSelectedCandidateIds((prev) =>
@@ -86,7 +95,7 @@ export const TeamBuilderView: React.FC = () => {
     );
   };
 
-  // Live combined coverage of existing members + owner-selected candidates
+  // Live combined coverage of existing members + owner-selected candidates (preview)
   const liveCoverage = useMemo(() => {
     if (!selectedProject) return { coveredSkills: [], missingSkills: [], coveragePercentage: 0 };
     const selectedDevs = developers.filter((d) => selectedCandidateIds.includes(d.userId));
@@ -100,13 +109,23 @@ export const TeamBuilderView: React.FC = () => {
       pushToast('info', 'Only the project owner can send invitations for this project.');
       return;
     }
-    if (selectedCandidateIds.length === 0) {
-      pushToast('info', 'Select at least one candidate to invite.');
+    const eligibleIds = selectedCandidateIds.filter((devId) => {
+      if (selectedProject.memberIds.includes(devId)) return false;
+      const inv = invitations.find(
+        (i) => i.projectId === selectedProject.projectId && i.applicantId === devId
+      );
+      return !inv || inv.status === 'Rejected';
+    });
+
+    if (eligibleIds.length === 0) {
+      pushToast('info', 'Select at least one uninvited candidate to send invitations.');
       return;
     }
+
     setSendingInvites(true);
+    let sentCount = 0;
     try {
-      for (const devId of selectedCandidateIds) {
+      for (const devId of eligibleIds) {
         const cand = rankedCandidates.find((c) => c.developer.userId === devId);
         const rec = recommendedPlan?.candidates.find((c) => c.match.developer.userId === devId);
         if (!cand) continue;
@@ -117,8 +136,11 @@ export const TeamBuilderView: React.FC = () => {
           roleSuggested: rec?.suggestedRole || 'Collaborator',
           message: `You were matched with ${cand.overallScore}% skill compatibility for "${selectedProject.title}".`,
         });
+        sentCount += 1;
       }
-      pushToast('success', `Sent ${selectedCandidateIds.length} team invitations.`);
+      if (sentCount > 0) {
+        setSelectedCandidateIds((prev) => prev.filter((id) => !eligibleIds.includes(id)));
+      }
     } finally {
       setSendingInvites(false);
     }
@@ -148,43 +170,34 @@ export const TeamBuilderView: React.FC = () => {
         });
       }
 
+      // Only add confirmed project members (candidates who accepted an invite or join request)
       for (const dev of existingMemberProfiles) {
         if (dev.userId === selectedProject.ownerId) continue;
+        const acceptedInv = invitations.find(
+          (i) => i.projectId === selectedProject.projectId && i.applicantId === dev.userId && i.status === 'Accepted'
+        );
         const score = rankedCandidates.find((r) => r.developer.userId === dev.userId)?.overallScore ?? 90;
         memberSnapshots.push({
           userId: dev.userId,
           name: dev.name,
           username: dev.username,
           avatarUrl: dev.avatarUrl,
-          role: 'Team Member',
+          role: acceptedInv?.roleSuggested || 'Team Member',
           skills: dev.skills,
           matchScore: score,
         });
       }
 
-      // Also include any selected candidates not yet listed in memberIds
-      const selectedDevs = developers.filter(
-        (d) => selectedCandidateIds.includes(d.userId) && !selectedProject.memberIds.includes(d.userId)
+      const confirmedCoverage = computeTeamCoverageFromMembers(
+        selectedProject.requiredSkills,
+        existingMemberProfiles
       );
-      for (const dev of selectedDevs) {
-        const rec = recommendedPlan?.candidates.find((c) => c.match.developer.userId === dev.userId);
-        const score = rankedCandidates.find((r) => r.developer.userId === dev.userId)?.overallScore ?? 85;
-        memberSnapshots.push({
-          userId: dev.userId,
-          name: dev.name,
-          username: dev.username,
-          avatarUrl: dev.avatarUrl,
-          role: rec?.suggestedRole || 'Collaborator',
-          skills: dev.skills,
-          matchScore: score,
-        });
-      }
 
       const team = await createOrUpdateTeam({
         project: selectedProject,
         members: memberSnapshots,
-        skillCoverage: liveCoverage.coveragePercentage,
-        coveredSkills: liveCoverage.coveredSkills,
+        skillCoverage: confirmedCoverage.coveragePercentage,
+        coveredSkills: confirmedCoverage.coveredSkills,
       });
 
       setSelectedTeamId(team.teamId);
@@ -330,7 +343,7 @@ export const TeamBuilderView: React.FC = () => {
                 type="button"
                 disabled={sendingInvites || selectedCandidateIds.length === 0}
                 onClick={handleSendAllInvitations}
-                className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 text-xs font-medium text-[#0969DA] bg-[#F6F8FA] hover:bg-[#EAEFF4] border border-[#D1D9E0] disabled:opacity-50 rounded-lg"
+                className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 text-xs font-medium text-white bg-[#0969DA] hover:bg-[#0550AE] disabled:opacity-50 rounded-lg"
               >
                 <Send className="w-3.5 h-3.5" />
                 {sendingInvites
@@ -341,11 +354,14 @@ export const TeamBuilderView: React.FC = () => {
                 type="button"
                 disabled={creatingTeam}
                 onClick={handleApproveAndCreateTeam}
-                className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 text-xs font-medium text-white bg-[#1A7F37] hover:bg-[#15692D] disabled:opacity-50 rounded-lg"
+                className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 text-xs font-medium text-[#1A7F37] bg-[#F6F8FA] hover:bg-[#EAEFF4] border border-[#D1D9E0] disabled:opacity-50 rounded-lg"
               >
                 <CheckCircle2 className="w-3.5 h-3.5" />
-                {creatingTeam ? 'Creating Team...' : 'Approve & Launch Team Workspace'}
+                {creatingTeam ? 'Opening Workspace...' : 'Launch Team Workspace (Confirmed Members)'}
               </button>
+              <p className="text-[11px] text-[#656D76] leading-relaxed">
+                Invited candidates stay Pending until they accept in their Invitations inbox, then join your team automatically.
+              </p>
             </div>
           ) : (
             <p className="text-xs text-[#656D76] pt-2">
@@ -410,10 +426,11 @@ export const TeamBuilderView: React.FC = () => {
                       <div className="flex items-start gap-3 min-w-0">
                         <input
                           type="checkbox"
+                          disabled={Boolean(existingInv && existingInv.status !== 'Rejected')}
                           checked={isSelected}
                           onChange={() => toggleCandidate(cand.developer.userId)}
                           aria-label={`Select ${cand.developer.name}`}
-                          className="mt-1.5 w-4 h-4 accent-[#0969DA]"
+                          className="mt-1.5 w-4 h-4 accent-[#0969DA] disabled:opacity-40"
                         />
                         <Avatar name={cand.developer.name} src={cand.developer.avatarUrl} size="md" />
                         <div className="min-w-0">
@@ -450,9 +467,22 @@ export const TeamBuilderView: React.FC = () => {
                         </div>
                         {selectedProject.ownerId === uid && (
                           <div>
-                            {existingInv ? (
-                              <span className="text-xs font-medium text-[#656D76]">
-                                Invite: {existingInv.status}
+                            {existingInv && existingInv.status === 'Pending' ? (
+                              <div className="inline-flex items-center gap-2">
+                                <span className="text-xs font-medium text-[#9A6700]">
+                                  Pending
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => cancelInvitation(existingInv)}
+                                  className="text-[11px] font-medium text-[#CF222E] hover:underline"
+                                >
+                                  Withdraw
+                                </button>
+                              </div>
+                            ) : existingInv && existingInv.status === 'Accepted' ? (
+                              <span className="text-xs font-medium text-[#1A7F37]">
+                                Accepted
                               </span>
                             ) : (
                               <button
@@ -469,7 +499,7 @@ export const TeamBuilderView: React.FC = () => {
                                 className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-[#0969DA] bg-white border border-[#D1D9E0] hover:border-[#0969DA] rounded-md"
                               >
                                 <UserPlus className="w-3 h-3" />
-                                Invite
+                                {existingInv?.status === 'Rejected' ? 'Re-invite' : 'Invite'}
                               </button>
                             )}
                           </div>

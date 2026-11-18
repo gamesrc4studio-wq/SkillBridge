@@ -1,0 +1,263 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Public developer profile document stored in users/{userId} without PII.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "username": { "type": "string", "minLength": 2, "maxLength": 40, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "avatarUrl": { "type": "string", "maxLength": 500 },
+        "bio": { "type": "string", "maxLength": 600 },
+        "education": { "type": "string", "maxLength": 120 },
+        "college": { "type": "string", "maxLength": 150 },
+        "skills": { "type": "array" },
+        "skillLevels": { "type": "object" },
+        "experience": { "type": "string", "enum": ["Student", "Entry", "Intermediate", "Senior"] },
+        "github": { "type": "string", "maxLength": 300 },
+        "portfolio": { "type": "string", "maxLength": 300 },
+        "interests": { "type": "array" },
+        "availability": { "type": "string", "enum": ["Available", "Part-time", "Weekends Only", "Busy"] },
+        "preferredCategories": { "type": "array" },
+        "isPublic": { "type": "boolean" },
+        "profileCompleted": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "name", "username", "skills", "experience", "availability", "isPublic", "profileCompleted", "createdAt", "updatedAt"]
+    },
+    "PrivateUserAccount": {
+      "title": "PrivateUserAccount",
+      "description": "Private PII and saved bookmarks stored in users/{userId}/private/account.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "email": { "type": "string", "maxLength": 200 },
+        "savedProjectIds": { "type": "array" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "email", "savedProjectIds", "updatedAt"]
+    },
+    "Project": {
+      "title": "Project",
+      "description": "Collaboration project record stored in projects/{projectId}.",
+      "type": "object",
+      "properties": {
+        "projectId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerName": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "title": { "type": "string", "minLength": 2, "maxLength": 140 },
+        "description": { "type": "string", "minLength": 10, "maxLength": 3000 },
+        "category": { "type": "string", "enum": ["Web Development", "Artificial Intelligence", "Machine Learning", "Mobile Applications", "Data Science", "Cybersecurity", "Blockchain", "Other"] },
+        "projectType": { "type": "string", "enum": ["Open Source", "Startup", "Academic", "Hackathon", "Research"] },
+        "requiredSkills": { "type": "array" },
+        "teamSize": { "type": "number" },
+        "experienceRequired": { "type": "string", "enum": ["Any", "Student", "Entry", "Intermediate", "Senior"] },
+        "duration": { "type": "string", "maxLength": 60 },
+        "difficulty": { "type": "string", "enum": ["Beginner", "Intermediate", "Advanced"] },
+        "openPositions": { "type": "number" },
+        "visibility": { "type": "string", "enum": ["Public", "Private"] },
+        "status": { "type": "string", "enum": ["Open", "In Progress", "Recruitment Closed", "Completed"] },
+        "objectives": { "type": "array" },
+        "technologies": { "type": "array" },
+        "memberIds": { "type": "array" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["projectId", "ownerId", "ownerName", "title", "description", "category", "projectType", "requiredSkills", "teamSize", "experienceRequired", "duration", "difficulty", "openPositions", "visibility", "status", "memberIds", "createdAt", "updatedAt"]
+    },
+    "Team": {
+      "title": "Team",
+      "description": "Formed team workspace stored in teams/{teamId}.",
+      "type": "object",
+      "properties": {
+        "teamId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "projectId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "projectTitle": { "type": "string", "minLength": 1, "maxLength": 140 },
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "memberIds": { "type": "array" },
+        "members": { "type": "array" },
+        "skillCoverage": { "type": "number" },
+        "coveredSkills": { "type": "array" },
+        "status": { "type": "string", "enum": ["Active", "Completed", "Archived"] },
+        "sharedNotes": { "type": "string", "maxLength": 5000 },
+        "announcements": { "type": "array" },
+        "milestones": { "type": "array" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["teamId", "projectId", "projectTitle", "ownerId", "memberIds", "members", "skillCoverage", "coveredSkills", "status", "createdAt", "updatedAt"]
+    },
+    "Invitation": {
+      "title": "Invitation",
+      "description": "Project invitation or join request stored in invitations/{invitationId}.",
+      "type": "object",
+      "properties": {
+        "invitationId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "type": { "type": "string", "enum": ["invite", "join_request"] },
+        "projectId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "projectTitle": { "type": "string", "minLength": 1, "maxLength": 140 },
+        "senderId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "senderName": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "receiverId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "receiverName": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "applicantId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "applicantName": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "roleSuggested": { "type": "string", "maxLength": 80 },
+        "message": { "type": "string", "maxLength": 600 },
+        "status": { "type": "string", "enum": ["Pending", "Accepted", "Rejected"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["invitationId", "type", "projectId", "projectTitle", "senderId", "senderName", "receiverId", "receiverName", "applicantId", "applicantName", "status", "createdAt", "updatedAt"]
+    },
+    "Task": {
+      "title": "Task",
+      "description": "Team Kanban task stored in tasks/{taskId}.",
+      "type": "object",
+      "properties": {
+        "taskId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "projectId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "teamId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "projectOwnerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "teamMemberIds": { "type": "array" },
+        "title": { "type": "string", "minLength": 2, "maxLength": 160 },
+        "description": { "type": "string", "maxLength": 1500 },
+        "assignedTo": { "type": "string", "maxLength": 128 },
+        "assignedToName": { "type": "string", "maxLength": 100 },
+        "createdBy": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "status": { "type": "string", "enum": ["To Do", "In Progress", "Completed"] },
+        "priority": { "type": "string", "enum": ["Low", "Medium", "High"] },
+        "dueDate": { "type": "string", "maxLength": 40 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["taskId", "projectId", "teamId", "projectOwnerId", "teamMemberIds", "title", "createdBy", "status", "priority", "createdAt", "updatedAt"]
+    },
+    "TeamMessage": {
+      "title": "TeamMessage",
+      "description": "Real-time team discussion message stored in messages/{messageId}.",
+      "type": "object",
+      "properties": {
+        "messageId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "projectId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "channel": { "type": "string", "enum": ["general", "engineering", "design", "milestones"] },
+        "senderId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "senderName": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "senderAvatar": { "type": "string", "maxLength": 500 },
+        "message": { "type": "string", "minLength": 1, "maxLength": 2000 },
+        "projectOwnerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "teamMemberIds": { "type": "array" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["messageId", "projectId", "channel", "senderId", "senderName", "message", "projectOwnerId", "teamMemberIds", "timestamp"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "In-app user notification stored in notifications/{notificationId}.",
+      "type": "object",
+      "properties": {
+        "notificationId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "actorId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "type": { "type": "string", "enum": ["invitation", "invitation_accepted", "invitation_rejected", "join_request", "task_assigned", "task_updated", "announcement", "project_update"] },
+        "message": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "linkView": { "type": "string", "maxLength": 80 },
+        "read": { "type": "boolean" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["notificationId", "userId", "actorId", "type", "message", "read", "timestamp"]
+    },
+    "Report": {
+      "title": "Report",
+      "description": "Moderation report stored in reports/{reportId}.",
+      "type": "object",
+      "properties": {
+        "reportId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "reporterId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "targetType": { "type": "string", "enum": ["user", "project"] },
+        "targetId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "targetTitle": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "reason": { "type": "string", "minLength": 5, "maxLength": 1000 },
+        "status": { "type": "string", "enum": ["Pending", "Reviewed", "Resolved", "Dismissed"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["reportId", "reporterId", "targetType", "targetId", "targetTitle", "reason", "status", "createdAt", "updatedAt"]
+    },
+    "SavedAnalysis": {
+      "title": "SavedAnalysis",
+      "description": "Saved Gemini AI project analysis stored in savedAnalyses/{analysisId}.",
+      "type": "object",
+      "properties": {
+        "analysisId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ideaPrompt": { "type": "string", "minLength": 5, "maxLength": 2000 },
+        "result": { "type": "object" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["analysisId", "userId", "ideaPrompt", "result", "createdAt"]
+    },
+    "ActivityEvent": {
+      "title": "ActivityEvent",
+      "description": "Developer activity log for contribution calendar stored in activities/{activityId}.",
+      "type": "object",
+      "properties": {
+        "activityId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "action": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "targetTitle": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "dateKey": { "type": "string", "minLength": 10, "maxLength": 10, "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["activityId", "userId", "action", "targetTitle", "dateKey", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Public developer profile without PII."
+    },
+    "/users/{userId}/private/{docId}": {
+      "schema": { "$ref": "#/entities/PrivateUserAccount" },
+      "description": "Private PII (email) and saved bookmarks isolated per user."
+    },
+    "/projects/{projectId}": {
+      "schema": { "$ref": "#/entities/Project" },
+      "description": "Collaboration projects."
+    },
+    "/teams/{teamId}": {
+      "schema": { "$ref": "#/entities/Team" },
+      "description": "Formed teams and shared workspace notes/announcements."
+    },
+    "/invitations/{invitationId}": {
+      "schema": { "$ref": "#/entities/Invitation" },
+      "description": "Project invitations and join requests."
+    },
+    "/tasks/{taskId}": {
+      "schema": { "$ref": "#/entities/Task" },
+      "description": "Kanban tasks scoped to project teams."
+    },
+    "/messages/{messageId}": {
+      "schema": { "$ref": "#/entities/TeamMessage" },
+      "description": "Team channel messages scoped to authorized team members."
+    },
+    "/notifications/{notificationId}": {
+      "schema": { "$ref": "#/entities/Notification" },
+      "description": "User notifications."
+    },
+    "/reports/{reportId}": {
+      "schema": { "$ref": "#/entities/Report" },
+      "description": "Content and profile moderation reports."
+    },
+    "/savedAnalyses/{analysisId}": {
+      "schema": { "$ref": "#/entities/SavedAnalysis" },
+      "description": "User-saved Gemini AI project analyses."
+    },
+    "/activities/{activityId}": {
+      "schema": { "$ref": "#/entities/ActivityEvent" },
+      "description": "Real application activity events powering the contribution calendar."
+    }
+  }
+}

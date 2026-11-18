@@ -1,0 +1,6 @@
+{
+  "name": "SkillBridge",
+  "description": "Smart Project Collaboration & AI Team Finder. Discover developers, analyze project ideas with Gemini, match skills deterministically, and collaborate in shared team workspaces.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
